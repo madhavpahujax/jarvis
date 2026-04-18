@@ -273,6 +273,7 @@
     </div>
     <div style="padding:12px; border-top:1px solid #1e293b;">
       <button class="create-btn" onclick="openCreateModal()">+ CREATE NEW AGENT</button>
+      <button class="create-btn" style="margin-top:6px; border-color:rgba(255,255,255,0.1); color:#64748b;" onclick="showApiKeyModal()">🔑 CHANGE API KEY</button>
     </div>
   </div>
 
@@ -339,6 +340,25 @@
   </div>
 </div>
 
+<!-- API Key Modal -->
+<div class="modal-overlay" id="api-modal" style="display:none;">
+  <div class="modal">
+    <h2>🔑 CONNECT TO AI</h2>
+    <p style="color:#94a3b8; font-size:12px; font-family:'IBM Plex Mono',monospace; margin-bottom:20px; line-height:1.7; text-align:center;">
+      JARVIS needs an Anthropic API key to think.<br>
+      Get one free at <a href="https://console.anthropic.com" target="_blank" style="color:#00d4ff;">console.anthropic.com</a>
+    </p>
+    <label>YOUR API KEY</label>
+    <input id="api-key-input" placeholder="sk-ant-..." style="font-size:12px;" />
+    <p style="color:#475569; font-size:10px; font-family:'IBM Plex Mono',monospace; margin-top:-10px; margin-bottom:18px;">
+      Your key is stored only on your device. Never shared.
+    </p>
+    <div class="modal-actions">
+      <button class="deploy-btn" style="background:rgba(0,212,255,0.13); border-color:rgba(0,212,255,0.33); color:#00d4ff;" onclick="saveApiKey()">ACTIVATE JARVIS</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════
 // J.A.R.V.I.S. MULTI-AGENT AI ENGINE
@@ -371,9 +391,11 @@ let agents = JSON.parse(localStorage.getItem('jarvis_agents')) || [...DEFAULT_AG
 let activeAgent = agents[0].id;
 let conversations = JSON.parse(localStorage.getItem('jarvis_convos')) || {};
 let knowledge = JSON.parse(localStorage.getItem('jarvis_knowledge')) || [];
+let apiKey = localStorage.getItem('jarvis_api_key') || '';
 let currentView = 'chat';
 let loading = false;
 let sidebarOpen = true;
+let showApiModal = !apiKey;
 
 // Modal state
 let caIcon = "🤖";
@@ -561,9 +583,10 @@ async function sendMessage() {
     : '';
 
   try {
+    if (!apiKey) { showApiKeyModal(); loading = false; render(); return; }
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
@@ -638,8 +661,24 @@ function deployAgent() {
   save(); render();
 }
 
+// ── API KEY ──
+function showApiKeyModal() {
+  showApiModal = true;
+  document.getElementById('api-modal').style.display = 'flex';
+}
+function saveApiKey() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key) { alert('Please enter your API key.'); return; }
+  apiKey = key;
+  localStorage.setItem('jarvis_api_key', apiKey);
+  showApiModal = false;
+  document.getElementById('api-modal').style.display = 'none';
+  render();
+}
+
 // ── INIT ──
 render();
+if (showApiModal) showApiKeyModal();
 
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
