@@ -345,11 +345,11 @@
   <div class="modal">
     <h2>🔑 CONNECT TO AI</h2>
     <p style="color:#94a3b8; font-size:12px; font-family:'IBM Plex Mono',monospace; margin-bottom:20px; line-height:1.7; text-align:center;">
-      JARVIS needs an Anthropic API key to think.<br>
-      Get one free at <a href="https://console.anthropic.com" target="_blank" style="color:#00d4ff;">console.anthropic.com</a>
+      JARVIS needs a free Google Gemini API key to think.<br>
+      Get one free (no credit card needed) at<br><a href="https://aistudio.google.com/apikey" target="_blank" style="color:#00d4ff;">aistudio.google.com/apikey</a>
     </p>
-    <label>YOUR API KEY</label>
-    <input id="api-key-input" placeholder="sk-ant-..." style="font-size:12px;" />
+    <label>YOUR GEMINI API KEY</label>
+    <input id="api-key-input" placeholder="AIza..." style="font-size:12px;" />
     <p style="color:#475569; font-size:10px; font-family:'IBM Plex Mono',monospace; margin-top:-10px; margin-bottom:18px;">
       Your key is stored only on your device. Never shared.
     </p>
@@ -584,21 +584,44 @@ async function sendMessage() {
 
   try {
     if (!apiKey) { showApiKeyModal(); loading = false; render(); return; }
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+
+    // Build Gemini conversation history
+    const history = conversations[activeAgent].slice(-20);
+    const geminiContents = [];
+
+    // Add system instruction as first user message context
+    const systemMsg = agent.systemPrompt + knowledgeCtx;
+
+    for (const m of history) {
+      geminiContents.push({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.content }]
+      });
+    }
+
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        system: agent.systemPrompt + knowledgeCtx,
-        messages: conversations[activeAgent].slice(-20).map(m => ({ role: m.role, content: m.content })),
+        system_instruction: { parts: [{ text: systemMsg }] },
+        contents: geminiContents,
+        generationConfig: { maxOutputTokens: 1000, temperature: 0.8 }
       }),
     });
     const data = await res.json();
-    const reply = data.content?.map(b => b.text || '').join('') || "I'm experiencing a connection issue, Sir. Please try again.";
+
+    let reply = '';
+    if (data.candidates && data.candidates[0]?.content?.parts) {
+      reply = data.candidates[0].content.parts.map(p => p.text || '').join('');
+    } else if (data.error) {
+      reply = `Error: ${data.error.message || 'Something went wrong. Please check your API key.'}`;
+    } else {
+      reply = "I'm experiencing a connection issue, Sir. Please try again.";
+    }
+
     conversations[activeAgent].push({ role: 'assistant', content: reply });
   } catch (e) {
-    conversations[activeAgent].push({ role: 'assistant', content: "Connection disrupted. My systems seem to be offline momentarily." });
+    conversations[activeAgent].push({ role: 'assistant', content: "Connection disrupted. My systems seem to be offline momentarily. Please check your internet connection." });
   }
 
   loading = false;
