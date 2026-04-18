@@ -566,6 +566,36 @@ speechSynthesis.getVoices();
 if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
 
 // ── SEND MESSAGE ──
+const MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.0-flash-lite',
+];
+
+async function tryModel(modelName, systemMsg, geminiContents) {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: systemMsg }] },
+      contents: geminiContents,
+      generationConfig: { maxOutputTokens: 1000, temperature: 0.8 }
+    }),
+  });
+  const data = await res.json();
+
+  if (data.candidates && data.candidates[0]?.content?.parts) {
+    return { ok: true, reply: data.candidates[0].content.parts.map(p => p.text || '').join('') };
+  } else if (data.error) {
+    const msg = data.error.message || '';
+    if (msg.includes('high demand') || msg.includes('overloaded') || msg.includes('quota') || msg.includes('429') || msg.includes('not found') || msg.includes('not supported')) {
+      return { ok: false, retry: true, error: msg };
+    }
+    return { ok: false, retry: false, error: msg };
+  }
+  return { ok: false, retry: true, error: 'Unknown error' };
+}
+
 async function sendMessage() {
   const input = document.getElementById('msg-input');
   const text = input.value.trim();
@@ -585,11 +615,8 @@ async function sendMessage() {
   try {
     if (!apiKey) { showApiKeyModal(); loading = false; render(); return; }
 
-    // Build Gemini conversation history
     const history = conversations[activeAgent].slice(-20);
     const geminiContents = [];
-
-    // Add system instruction as first user message context
     const systemMsg = agent.systemPrompt + knowledgeCtx;
 
     for (const m of history) {
@@ -599,24 +626,24 @@ async function sendMessage() {
       });
     }
 
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemMsg }] },
-        contents: geminiContents,
-        generationConfig: { maxOutputTokens: 1000, temperature: 0.8 }
-      }),
-    });
-    const data = await res.json();
-
     let reply = '';
-    if (data.candidates && data.candidates[0]?.content?.parts) {
-      reply = data.candidates[0].content.parts.map(p => p.text || '').join('');
-    } else if (data.error) {
-      reply = `Error: ${data.error.message || 'Something went wrong. Please check your API key.'}`;
-    } else {
-      reply = "I'm experiencing a connection issue, Sir. Please try again.";
+    let success = false;
+
+    for (const model of MODELS) {
+      const result = await tryModel(model, systemMsg, geminiContents);
+      if (result.ok) {
+        reply = result.reply;
+        success = true;
+        break;
+      }
+      if (!result.retry) {
+        reply = `Error: ${result.error}`;
+        break;
+      }
+    }
+
+    if (!success && !reply) {
+      reply = "All AI models are currently experiencing high demand, Sir. This is temporary — please try again in a minute or two.";
     }
 
     conversations[activeAgent].push({ role: 'assistant', content: reply });
