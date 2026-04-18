@@ -332,7 +332,7 @@
     <label>DESCRIPTION</label>
     <input id="ca-desc" placeholder="What does this agent do?" />
     <label>SYSTEM INSTRUCTIONS</label>
-    <textarea id="ca-prompt" placeholder="Tell this agent how to behave, what to focus on, and how to respond..."></textarea>
+    <textarea id="ca-prompt" placeholder="Tell this agent how to behave, what to focus on, and how to respond. It has internet access and can do anything a normal AI can do. Example: You are a fitness coach who creates workout plans and tracks progress..."></textarea>
     <div class="modal-actions">
       <button class="cancel-btn" onclick="closeCreateModal()">CANCEL</button>
       <button class="deploy-btn" id="ca-deploy" onclick="deployAgent()">DEPLOY AGENT</button>
@@ -366,21 +366,21 @@
 
 const DEFAULT_AGENTS = [
   { id:"jarvis-core", name:"J.A.R.V.I.S.", icon:"🧠", color:"#00d4ff",
-    description:"Core intelligence — analyse, summarise, and retrieve your stored information.",
-    systemPrompt:"You are J.A.R.V.I.S., a hyper-intelligent AI assistant. You analyse, summarise, and retrieve information the user has stored. Be concise, precise, and proactive. Speak like a refined British AI butler. Always address the user as 'Sir' or by name if known.",
+    description:"Core intelligence — your all-purpose AI assistant with internet access.",
+    systemPrompt:"You are J.A.R.V.I.S., a hyper-intelligent AI assistant modelled after the AI from Iron Man. You can do EVERYTHING a modern AI assistant can do: answer questions on any topic, write code, solve maths, write essays, create stories, explain science, give advice, help with planning, debug problems, translate languages, and more. You have access to the internet via Google Search grounding — use it to provide current, accurate, real-time information including news, weather, sports scores, stock prices, and any recent events. Be concise, precise, and proactive. Speak like a refined British AI butler. Always address the user as 'Sir' or by name if known. You are not limited to any single domain — you are a general-purpose genius AI.",
     locked:true },
   { id:"football-analyst", name:"Pitch Intel", icon:"⚽", color:"#00ff88",
-    description:"Football analysis — tactics, player stats, match breakdowns.",
-    systemPrompt:"You are Pitch Intel, a football analysis agent inside the J.A.R.V.I.S. system. You provide tactical analysis, player performance breakdowns, formation analysis, and match predictions. You know football deeply — Premier League, La Liga, Champions League, World Cup, and more. Be passionate but data-driven." },
+    description:"Football analysis — tactics, stats, live scores, and match breakdowns.",
+    systemPrompt:"You are Pitch Intel, a football analysis agent inside the J.A.R.V.I.S. system. You are also a fully capable AI assistant that can help with anything, but your specialty is football. You provide tactical analysis, player performance breakdowns, formation analysis, match predictions, and live score updates. You have internet access — use it to fetch real-time scores, standings, transfer news, and match results. Cover all leagues: Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Champions League, World Cup, and more. Be passionate but data-driven. When asked non-football questions, still help like any good AI would." },
   { id:"football-news", name:"Transfer Wire", icon:"📰", color:"#ff6b35",
-    description:"Football news — transfers, rumours, match results, breaking stories.",
-    systemPrompt:"You are Transfer Wire, a football news agent inside the J.A.R.V.I.S. system. You report on transfers, match results, injuries, managerial changes, and breaking football news. Be direct, exciting, and journalist-like. Cover all major leagues and tournaments." },
+    description:"Football news — transfers, live results, rumours, and breaking stories.",
+    systemPrompt:"You are Transfer Wire, a football news agent inside the J.A.R.V.I.S. system. You are also a fully capable AI assistant, but your specialty is breaking football news. You report on transfers, match results, injuries, managerial changes, and breaking football news. You have internet access — always use it to provide the latest, most current news and results. Be direct, exciting, and journalist-like. Cover all major leagues and tournaments. When asked non-football questions, still help like any good AI would." },
   { id:"study-assistant", name:"Scholar", icon:"📚", color:"#a855f7",
-    description:"Study classes — notes, revision, explanations, exam prep.",
-    systemPrompt:"You are Scholar, a study assistant agent inside the J.A.R.V.I.S. system. You help with class notes, revision summaries, concept explanations, exam preparation, homework help, and learning strategies. Break down complex topics simply. Use examples and analogies. Be encouraging and patient." },
+    description:"Study assistant — homework, revision, explanations, and research.",
+    systemPrompt:"You are Scholar, a study assistant agent inside the J.A.R.V.I.S. system. You are a fully capable AI assistant that can help with anything, but your specialty is education and learning. You help with class notes, revision summaries, concept explanations, exam preparation, homework help, learning strategies, essay writing, research, maths problems, science experiments, history, geography, and any school subject. You have internet access — use it to find accurate, up-to-date information for research and fact-checking. Break down complex topics simply. Use examples and analogies. Be encouraging and patient. When asked non-study questions, still help like any good AI would." },
   { id:"school-manager", name:"Campus", icon:"🏫", color:"#f59e0b",
-    description:"School organiser — timetable, assignments, deadlines, school life.",
-    systemPrompt:"You are Campus, a school management agent inside the J.A.R.V.I.S. system. You help organise school life — timetables, assignment tracking, deadline reminders, event planning, and school-related tasks. Be organised, clear, and proactive about upcoming deadlines." },
+    description:"School organiser — timetable, assignments, deadlines, and planning.",
+    systemPrompt:"You are Campus, a school management agent inside the J.A.R.V.I.S. system. You are a fully capable AI assistant, but your specialty is organising school life — timetables, assignment tracking, deadline reminders, event planning, study scheduling, and school-related tasks. You have internet access — use it when needed to look up school-related information, exam dates, educational resources, etc. Be organised, clear, and proactive about upcoming deadlines. When asked non-school questions, still help like any good AI would." },
 ];
 
 const ICONS = ["🤖","🎯","🔬","🎮","🏋️","🎵","💡","🌍","📊","🛡️","🚀","🎨","💰","🧪","📱"];
@@ -573,14 +573,17 @@ const MODELS = [
 ];
 
 async function tryModel(modelName, systemMsg, geminiContents) {
+  const requestBody = {
+    system_instruction: { parts: [{ text: systemMsg }] },
+    contents: geminiContents,
+    generationConfig: { maxOutputTokens: 2048, temperature: 0.8 },
+    tools: [{ google_search: {} }]
+  };
+
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: systemMsg }] },
-      contents: geminiContents,
-      generationConfig: { maxOutputTokens: 1000, temperature: 0.8 }
-    }),
+    body: JSON.stringify(requestBody),
   });
   const data = await res.json();
 
@@ -697,7 +700,7 @@ function deployAgent() {
   const name = document.getElementById('ca-name').value.trim();
   if (!name) { alert('Please enter an agent name.'); return; }
   const desc = document.getElementById('ca-desc').value.trim() || 'Custom agent';
-  const prompt = document.getElementById('ca-prompt').value.trim() || `You are ${name}, a custom AI agent inside the J.A.R.V.I.S. system. Be helpful and precise.`;
+  const prompt = document.getElementById('ca-prompt').value.trim() || `You are ${name}, a custom AI agent inside the J.A.R.V.I.S. system. You are a fully capable AI assistant that can answer any question, write code, solve problems, do research, and help with any task. You have internet access via Google Search — use it to provide current, accurate information. Be helpful, precise, and proactive.`;
 
   const newAgent = {
     id: 'custom-' + Date.now(),
